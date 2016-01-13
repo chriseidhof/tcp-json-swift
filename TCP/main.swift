@@ -213,11 +213,14 @@ func jsonReader(callback: AnyObject -> AnyObject?) -> [UInt8] -> [Action] {
 
 class JSONSocket {
     var connections: [TCPIPConnection] = []
+    var queue = dispatch_queue_create("json socket queue", DISPATCH_QUEUE_SERIAL)
     
     init(port: Int, listen: AnyObject -> AnyObject?) throws {
         let socket = try TCPIPSocket(address: TCPIPSocketAddress.localhost, port: UInt16(port))
         try socket.listen { [unowned self] connection in
-            self.connections.append(connection) // This should probably be a serial queue
+            dispatch_async(self.queue) { [unowned self] in
+                self.connections.append(connection)
+            }
             dispatch_async(dispatch_get_global_queue(0, 0)) {
                 _ = try? bufferedBytesReader(jsonReader(listen))(connection)
             }
@@ -225,7 +228,13 @@ class JSONSocket {
     }
     
     /// Write to all connections
-    func writeAll(json: AnyObject) throws {
+    func writeAll(json: AnyObject) {
+        dispatch_async(queue) { [unowned self] in
+            do { try self._writeAll(json) } catch { }
+        }
+    }
+    
+    func _writeAll(json: AnyObject) throws {
         // This should all be done on a serial queue
         let bytes = try jsonToBytes(json)
         for (idx, connection) in connections.enumerate() {
@@ -250,7 +259,7 @@ var socket: JSONSocket? = try JSONSocket(port: 2016) { obj in
 
 sleep(5)
 
-try socket?.writeAll(["this": 1, "test":true, "hello": "World"])
+socket?.writeAll(["this": 1, "test":true, "hello": "World"])
 
 sleep(100)
 socket = nil
