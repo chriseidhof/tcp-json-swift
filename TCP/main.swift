@@ -39,7 +39,6 @@ final class TCPIPConnection {
     
     func write(bytes: [UInt8]) throws {
         let r = Darwin.write(_conn, bytes, bytes.count)
-        print("Wrote:  \(r), \(bytes)")
         try postconditionDarwinAPICallResultCodeState(r == bytes.count)
     }
     
@@ -182,9 +181,14 @@ extension NSData {
     }
 }
 
+func jsonToBytes(json: AnyObject) throws -> [UInt8] {
+    let data = try NSJSONSerialization.dataWithJSONObject(json, options: NSJSONWritingOptions())
+    return UInt16(206).bytes + UInt32(data.length).bytes + data.uint8Bytes
+}
+
 /// Given a callback, this function tries to read an entire json-over-tcp
 /// message. It uses the same protocol as https://www.npmjs.com/package/json-over-tcp
-func jsonReader(callback: AnyObject -> ()) -> [UInt8] -> [Action] {
+func jsonReader(callback: AnyObject -> AnyObject?) -> [UInt8] -> [Action] {
     return { result in
         guard result.count >= 6 else { return [] }
         guard UInt16(bytes: result[0...1]) == 206 else {
@@ -199,16 +203,54 @@ func jsonReader(callback: AnyObject -> ()) -> [UInt8] -> [Action] {
         guard let json = try? NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions()) else {
             return [.CloseConnection(message: "Invalid JSON")]
         }
-        callback(json)
-        let answer = UInt16(206).bytes + UInt32(data.length).bytes + data.uint8Bytes
-        
-        return [.ProcessedBytes(count: lastIndex), .Write(bytes: answer)]
+        var result: [Action] = [.ProcessedBytes(count: lastIndex)]
+        if let resultValue = callback(json), bytes = try? jsonToBytes(resultValue) {
+            result.append(.Write(bytes: bytes))
+        }
+        return result
     }
 }
 
-let socket = try TCPIPSocket(address: TCPIPSocketAddress.localhost, port: 2015)
-try socket.listen(bufferedBytesReader(jsonReader {
-    print("json: \($0)")
-}))
-sleep(100)
+class JSONSocket {
+    var connections: [TCPIPConnection] = []
+    
+    init(port: Int, listen: AnyObject -> AnyObject?) throws {
+        let socket = try TCPIPSocket(address: TCPIPSocketAddress.localhost, port: UInt16(port))
+        try socket.listen { [unowned self] connection in
+            self.connections.append(connection) // This should probably be a serial queue
+            dispatch_async(dispatch_get_global_queue(0, 0)) {
+                _ = try? bufferedBytesReader(jsonReader(listen))(connection)
+            }
+        }
+    }
+    
+    /// Write to all connections
+    func writeAll(json: AnyObject) throws {
+        // This should all be done on a serial queue
+        let bytes = try jsonToBytes(json)
+        for (idx, connection) in connections.enumerate() {
+            do { try connection.write(bytes)  } catch {
+                connection.close()
+                connections.removeAtIndex(idx)
+            }
+        }
+    }
+    
+    deinit {
+        connections.forEach { $0.close() }
+    }
+}
 
+// Create a socket
+
+var socket: JSONSocket? = try JSONSocket(port: 2016) { obj in
+    print("Got an object: \(obj)")
+    return ["Hello": "World"]
+}
+
+sleep(5)
+
+try socket?.writeAll(["this": 1, "test":true, "hello": "World"])
+
+sleep(100)
+socket = nil
