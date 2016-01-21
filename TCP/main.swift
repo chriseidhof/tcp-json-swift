@@ -64,7 +64,7 @@ class ShoesServer {
     
     func run(message: Message, callback: ReturnMessage -> ()) throws {
         switch message {
-        case .App(let title, let width, let height, let rootView):
+        case .Window(let title, let width, let height, let rootView):
             windows.append(window(title, width: width, height: height) { [unowned self] app in
                 let (view, dict) = rootView.build(callback)
                 self.viewIDs = dict

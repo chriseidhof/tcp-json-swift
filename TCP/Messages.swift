@@ -9,7 +9,7 @@
 import Cocoa
 
 enum Message {
-    case App(title: String, width: Int, height: Int, rootView: ViewEmbedding)
+    case Window(title: String, width: Int, height: Int, rootView: ViewEmbedding)
     case GetValue(id: String, property: String)
     case SetValue(id: String, property: String, value: AnyObject)
 }
@@ -70,14 +70,14 @@ extension Message {
         let dictionary = try json as? [String:AnyObject] !! "Not a dictionary"
         let type = try dictionary["type"] as? String !! "No message type \(dictionary)"
         switch type {
-        case "app":
+        case "window":
             let (title, width, height, rootView) = try
                 all(dictionary.string("title"),
                     dictionary.int("width"),
                     dictionary.int("height"),
                     dictionary.viewEmbedding("root")
             )
-            self = .App(title: title, width: width, height: height, rootView: rootView)
+            self = .Window(title: title, width: width, height: height, rootView: rootView)
         case "get":
            let (id, property) = try all(dictionary.string("id"),
                                         dictionary.string("property"))
@@ -87,6 +87,8 @@ extension Message {
                                                dictionary.string("property"),
                                                dictionary["value"] !! "No value")
            self = .SetValue(id: id, property: property, value: value)
+        case "app":
+            throw "\"app\" is now renamed to \"window\""
         default:
             throw "Message not understood: \(type)"
         }
