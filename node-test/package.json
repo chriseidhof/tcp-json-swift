@@ -1,0 +1,7 @@
+{
+  "name": "shoes-test",
+  "version": "0.0.1",
+  "dependencies": {
+    "json-over-tcp": "^0.3.2"
+  }
+}
