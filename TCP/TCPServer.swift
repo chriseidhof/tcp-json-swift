@@ -60,6 +60,9 @@ final class TCPIPSocket {
     
     init(address: TCPIPSocketAddress, port: UInt16) throws {
         socketDescriptor =	Darwin.socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)
+        var options: Int32 = 1
+        setsockopt(socketDescriptor, SOL_SOCKET, SO_REUSEADDR, &options, socklen_t(sizeofValue(options)))
+
         try postconditionDarwinAPICallResultCodeState(socketDescriptor != -1)
         try bind(address, port)
     }
