@@ -45,7 +45,9 @@ class ShoesServer {
     }
 
     init(port: Int) throws {
-        socket = try JSONSocket(port: port) { [unowned self] messageDict in
+        socket = try JSONSocket(port: port, onConnect: { conn in
+          _ = try? conn.write(ReturnMessage.Hello.json)
+        }, listen: { [unowned self] messageDict in
             do {
               let message = try Message(json: messageDict)
               dispatch_async(dispatch_get_main_queue()) { [unowned self] in
@@ -59,7 +61,7 @@ class ShoesServer {
               self.sendError(error)
             }
             return nil
-        }
+        })
     }
     
     func run(message: Message, callback: ReturnMessage -> ()) throws {

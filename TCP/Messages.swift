@@ -18,6 +18,7 @@ enum ReturnMessage {
     case ButtonClick(id: String)
     case Value(id: String, property: String, value: AnyObject)
     case Error(error: ErrorType)
+    case Hello
 }
 
 extension ReturnMessage {
@@ -29,6 +30,8 @@ extension ReturnMessage {
             return ["type": "value", "receiver": id, "property": property, "value": value]
         case .Error(let e):
             return ["type": "error", "message": "\(e)"]
+        case .Hello:
+            return ["type": "hello", "version": "0.0.1"] // TODO use a real version
         }
     }
 }
